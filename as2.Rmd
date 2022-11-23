@@ -1,0 +1,378 @@
+---
+title: "Assignment2"
+output: html_notebook
+---
+
+``` markdown
+1.  Any TWO Supervised Learning Algorithms
+  a.    Download the following dataset Auto Insurance Claims Data from the link below:
+https://www.kaggle.com/buntyshah/auto-insurance-claims-data
+  b.    Using the R package, develop two fraud detection models with any TWO supervised learning algorithms. 
+  c.    You can refer to the provided R program of a fraud detection model using TWO sample supervised learning algorithms
+
+2.  Write an essay of not more than 2 pages on the following:
+Based on the results of your fraud detection models developed in (1) above:
+  a.    Describe the performances of the 2 fraud detection models based on the results; and 
+  b.    Explain which one is more suitable for this case and why from a practical perspective by citing examples.
+
+3.  Submission on Moodle:
+  a.    R language script
+  b.    A pdf version report
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(DMwR)
+library(nnet) 
+library(randomForest)
+library(caret)
+library(neuralnet)
+library(lattice)
+library(e1071)
+library(tidyr)
+library(tidyverse) # metapackage of all tidyverse packages
+library(magrittr)
+library(Metrics)
+library(pROC)
+library(precrec) #for Precision-Recall function
+library(ROSE) 
+library(nnet) 
+library(kernlab)
+origin_dataset = read.csv("insurance_claims.csv")
+```
+
+```{r}
+#EDA
+str(origin_dataset)
+summary(origin_dataset)
+
+#hist(origin_dataset$age)
+#hist(origin_dataset$months_as_customer)
+#barplot(origin_dataset$policy_state )
+#res1 <- table(origin_dataset[,'fraud_reported'])
+#barplot(res1 )
+```
+
+```{r}
+# because no.25 and no.40 are useless, so we delete them
+data_cleanning = origin_dataset[,c(-25,-40)] # delete variables
+# for more operations, we convert all characters into factor
+data_factor = data_cleanning %>% mutate_if(is.character,as.factor) 
+# convert to data_frame
+data_frame = as.data.frame(data_factor)
+table(data_frame$fraud_reported)
+#round(prop.table(table(dataset$fraud_reported)),2)
+data_frame$policy_bind_date = as.Date(data_frame$policy_bind_date) - as.Date("1990-01-08")
+data_frame$incident_date = as.Date(data_frame$incident_date) - as.Date("2015-01-01") 
+
+# univariate analysis on all numeric data
+data_frame %>%
+keep(is.numeric) %>%
+  gather() %>%                             
+ ggplot(aes(value)) +                     
+  facet_wrap(~ key, scales = "free") +  
+  geom_histogram(fill = "blue1",bins=50)+
+  theme(axis.text.x = element_text(angle = 45))
+if(FALSE) {
+    "
+    # univariate analysis on all factor data
+par(mfrow=c(4,4)) # 
+table(data_frame[,'policy_state'])%>%barplot(main='policy_state')
+table(data_frame[,'policy_csl'])%>%barplot(main='policy_csl')
+table(data_frame[,'insured_sex'])%>%barplot(main='insured_sex')
+table(data_frame[,'insured_education_level'])%>%barplot(main='insured_education_level')
+table(data_frame[,'insured_occupation'])%>%barplot(main='insured_occupation')
+table(data_frame[,'insured_hobbies'])%>%barplot(main='insured_hobbies')
+table(data_frame[,'insured_relationship'])%>%barplot(main='insured_relationship')
+table(data_frame[,'incident_type'])%>%barplot(main='incident_type')
+table(data_frame[,'incident_severity'])%>%barplot(main='incident_severity')
+table(data_frame[,'incident_state'])%>%barplot(main='incident_state')
+table(data_frame[,'incident_city'])%>%barplot(main='incident_city')
+table(data_frame[,'property_damage'])%>%barplot(main='property_damage')
+table(data_frame[,'auto_make'])%>%barplot(main='auto_make')
+table(data_frame[,'auto_model'])%>%barplot(main='auto_model')
+table(data_frame[,'fraud_reported'])%>%barplot(main='fraud_reported')
+
+    "
+}
+
+```
+
+```{r}
+# data pre-processing
+#data_frame_SMOTE <- SMOTE(fraud_reported ~ ., data_frame, perc.over = 100,perc.under=100)
+#table(newData$fraud_reported)
+#perc.over = xx 表示 少样本变成原来的（1+xx/100）倍
+#perc.under=yy 表示多样本变成少样本的 yy/100 *(xx/100)倍
+table(data_frame$fraud_reported)
+#newData <- SMOTE(fraud_reported ~ ., data_frame, perc.over = 100,perc.under=200)
+#table(newData$fraud_reported)
+data_frame_new = data.frame(newData)
+
+
+train = sample(nrow(data_frame), 0.7*nrow(data_frame), replace = FALSE)
+
+TrainSet = data_frame[train,]
+TestSet = data_frame[-train,]
+```
+
+```{r}
+#####################
+##  random forest  ##
+#####################
+#在随机森林算法的函数randomForest()中有两个非常重要的参数，而这两个参数又将影响模型的准确性，它们分别是mtry和ntree。一般对mtry的选择是逐一尝试，直到找到比较理想的值，ntree的选择可通过图形大致判断模型内误差稳定时的值。
+set.seed(1234)
+min=100
+num=0
+n=length(names(TrainSet))
+for(i in 1:(n-1)){
+  mtry_fit=randomForest(fraud_reported ~ ., data=TrainSet,mtry =i, importance = TRUE)  
+  err = mean(mtry_fit$err.rate)
+if(err<min) {    
+min=err     
+num=i }
+}
+print(min)
+print(num)
+# 求出了mtry = num,这个时候求ntree
+set.seed(1234)
+#带入mtry，尝试寻找ntree
+ntree_fit<-randomForest(fraud_reported ~ ., data=TrainSet,mtry =num, ntree=600)
+plot(ntree_fit,main='Number of trees and the error rate')
+#在200左右基本趋于稳定（即三条线开始平稳，无波动），故ntree=200
+#table(TrainSet$fraud_reported)
+model_rf = randomForest(fraud_reported ~ ., data=TrainSet,mtry =num, ntree=200, importance = TRUE,proximity=TRUE)  
+prediction_rf = predict(model_rf,TestSet)
+confusionMatrix(prediction_rf,TestSet$fraud_reported)
+table(TestSet$fraud_reported,prediction_rf,dnn=c("Reference","Prediction"))
+#ROC curve
+rf_roc_1 <- roc(TestSet$fraud_reported,as.numeric(prediction_rf))
+plot(rf_roc_1, print.auc=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE,auc.polygon.col="grey", print.thres=TRUE,main='ROC curve of random forest model, Mtry =20,ntree=500')
+prediction_rf = evalmod(scores = as.numeric(prediction_rf), labels = TestSet$fraud_reported, mode = "rocprc")
+prediction_rf
+
+#plot(rf_roc_1)
+rf_roc_1
+# show the importance
+model_rf$importance
+varImpPlot(model_rf,pch=3,col=1,cex=0.4,main="IMPORTANCE(varImpPlot)")
+
+
+MDSplot(model_rf,TrainSet$fraud_reported)
+print(model_rf)
+
+
+#plot(margin(model_rf))
+
+
+
+
+#prediction_rf = predict(model_rf,test_data)
+#confusionMatrix(prediction_rf,test_data$fraud_reported,positive="Y")
+
+
+```
+
+```{r}
+##### handle the imbalance data
+
+# data pre-processing
+#data_frame_SMOTE <- SMOTE(fraud_reported ~ ., data_frame, perc.over = 100,perc.under=100)
+#table(newData$fraud_reported)
+#perc.over = xx 表示 少样本变成原来的（1+xx/100）倍
+#perc.under=yy 表示多样本变成少样本的 yy/100 *(xx/100)倍
+table(data_frame$fraud_reported)
+newData <- SMOTE(fraud_reported ~ ., data_frame, perc.over = 100,perc.under=100)
+table(newData$fraud_reported)
+data_frame_new = data.frame(newData)
+train_new = sample(nrow(data_frame_new), 0.7*nrow(data_frame_new), replace = FALSE)
+TrainSet_new = data_frame[train_new,]
+TestSet_new = data_frame[-train_new,]
+
+#############rf
+set.seed(1234)
+min_new=100
+num_new=0
+n_new=length(names(TrainSet_new))
+for(i_new in 1:(n_new-1)){
+  mtry_fit_new=randomForest(fraud_reported ~ ., data=TrainSet_new,mtry =i_new, importance = TRUE)  
+  err_new = mean(mtry_fit_new$err.rate)
+if(err_new<min_new) {    
+min_new=err_new     
+num_new=i_new }
+}
+print(min_new)
+print(num_new)
+# 求出了mtry = num,这个时候求ntree
+set.seed(1234)
+#带入mtry，尝试寻找ntree
+ntree_fit_new<-randomForest(fraud_reported ~ ., data=TrainSet_new,mtry =num_new, ntree=600)
+plot(ntree_fit_new,main='Number of trees and the error rate')
+#在200左右基本趋于稳定（即三条线开始平稳，无波动），故ntree=200
+#table(TrainSet$fraud_reported)
+model_rf_new = randomForest(fraud_reported ~ ., data=TrainSet_new,mtry =num_new, ntree=500, importance = TRUE,proximity=TRUE)  
+prediction_rf_new = predict(model_rf_new,TestSet_new)
+confusionMatrix(prediction_rf_new,TestSet_new$fraud_reported)
+table(TestSet_new$fraud_reported,prediction_rf_new,dnn=c("Reference","Prediction"))
+#ROC curve
+rf_roc_1_new <- roc(TestSet_new$fraud_reported,as.numeric(prediction_rf_new))
+plot(rf_roc_1_new, print.auc=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE,auc.polygon.col="grey", print.thres=TRUE,main='ROC curve of random forest model, Mtry =20,ntree=500')
+prediction_rf_new = evalmod(scores = as.numeric(prediction_rf_new), labels = TestSet_new$fraud_reported, mode = "rocprc")
+prediction_rf_new
+
+#plot(rf_roc_1)
+rf_roc_1_new
+# show the importance
+model_rf_new$importance
+varImpPlot(model_rf_new,pch=3,col=1,cex=0.4,main="IMPORTANCE(varImpPlot)")
+
+
+MDSplot(model_rf_new,TrainSet_new$fraud_reported)
+print(model_rf_new)
+
+```
+
+```{r}
+
+
+if(FALSE) {
+    "
+    #####################
+##  logistic regression  ##
+#####################
+glm.func =glm(factor(fraud_reported) ~.,data=TrainSet, 
+             family = binomial
+            )
+#Using the trained model above, we make a prediction
+result_glm=predict(glm.func, newdata=TestSet,type='response' )
+# Drawing the roc curve
+roccurve_glm <- roc(TestSet$fraud_reported ~ result_glm)
+plot(roccurve_glm)
+roccurve_glm
+    "
+}
+
+```
+
+```{r}
+svm1 = tune.svm(fraud_reported~., data = TrainSet,
+              gamma = c(0.5,5,10,15,25,50,100,250),
+                cost =c(0.01,0.05,0.1,0.5,1,5,10,50,100,500)
+                )
+svm1$best.parameters
+
+
+```
+
+```{r}
+model_svm = svm(fraud_reported~., 
+                data=TrainSet,
+                kernel = 'radial',
+                gamma=0.5,
+                cost=0.01)
+predict_svm = predict(model_svm, TestSet)
+#svm.perf <- table(na.omit(TestSet)$fraud_reported, predict_svm, dnn=c("Actual", "Predicted"))
+#svm.perf
+#print("confusion matrix")
+confusionMatrix(data=predict_svm,
+                reference = TestSet$fraud_reported)
+
+svm <- ksvm(fraud_reported ~ . , data= TrainSet, kernel='rbfdot', C=1)
+svm
+
+y_pred_ksvm <- predict(svm, TestSet)
+performance <- y_pred_ksvm == TestSet$fraud_reported
+table(performance)
+prop.table(table(performance))
+
+
+#fit.svm <- svm(class~., data=df.train, gamma=.01, cost=1) #基于这一参数值组合，我们对全部训练样本拟合出新的SVM模型
+
+#svm.pred <- predict(fit.svm, na.omit(df.validate)) 
+
+#用这一模型对验证集中的样本单元进行预测
+
+#svm.perf <- table(na.omit(df.validate)$class, svm.pred, dnn=c("Actual", "Predicted"))
+
+#svm.perf
+
+```
+
+```{r}
+
+#####################
+####Neural Network###
+#####################
+
+#Calculate the error and find a better model
+err11=0
+err12=0
+n_tr=dim(TrainSet)[1]
+n_te=dim(TestSet)[1]
+for(i in seq(1, 701, 100))
+{
+  model=nnet(fraud_reported ~ ., data=TrainSet,maxit=i,size=6,decay = 0.1)
+  err11[i]=sum(predict(model,TrainSet,type='class')!=TrainSet[,38])/n_tr
+  err12[i]=sum(predict(model,TestSet,type='class')!=TestSet[,38])/n_te
+}
+
+error_1 = na.omit(err11)
+error_2 = na.omit(err12)
+plot(seq(1, 701, 100),error_1,col=1,type="b",ylab="Error rate",xlab="Training epoch",ylim=c(min(min(error_1),min(error_2)),max(max(error_1),max(error_2))))
+lines(seq(1, 701, 100),error_2,col=2,type="b")
+legend("topleft",pch=c(15,15),legend=c("Train","Test"),col=c(1,2),bty="n")
+
+#Final model and evaluation result
+model_best=nnet(fraud_reported ~ ., data=TrainSet,maxit=500,size=6,decay = 0.1)
+
+prediction_test = predict(model_best,TestSet,type="class")
+table = table(TestSet$fraud_reported,prediction_test)
+table
+confusionMatrix(table)
+
+
+
+
+#Final model and evaluation result
+model_best=nnet(fraud_reported ~ ., data=TrainSet,maxit=300,size=6,decay = 0.1)
+
+prediction_test = predict(model_best,TestSet,type="class")
+
+table1 = table(TestSet$fraud_reported,prediction_test)
+confusionMatrix(table1,positive="Y")
+
+
+```
+
+```{r}
+
+folds <- createFolds(y=TrainSet[,38],k=10)
+
+max=0  
+num=0 
+auc_value<-as.numeric()
+for(i in 1:10){  
+  fold_test <- TrainSet[folds[[i]],]   #取folds[[i]]作为测试集  
+  fold_train <- TrainSet[-folds[[i]],]   # 剩下的数据作为训练集    
+  fold_pre <- nnet(fraud_reported ~ ., data=fold_train,maxit=500,size=6,decay = 0.1)
+  #prediction_test = predict(model_best,TestSet,type="class")
+  fold_predict <- predict(fold_pre,fold_test,type='class')  
+  auc_value<- append(auc_value,as.numeric(auc(as.numeric(fold_test[,38]),fold_predict)))
+}  
+num<-which.max(auc_value)
+print(auc_value)
+
+```
+
+```{r}
+
+
+
+```
+
+```{r}
+
+
+
+```

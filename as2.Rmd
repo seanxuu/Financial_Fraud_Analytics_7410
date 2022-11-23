@@ -178,67 +178,9 @@ prop.table(table(performance))
 
 ```
 
-```{r}
-
-#####################
-####Neural Network###
-#####################
-
-#Calculate the error and find a better model
-err11=0
-err12=0
-n_tr=dim(TrainSet)[1]
-n_te=dim(TestSet)[1]
-for(i in seq(1, 701, 100))
-{
-  model=nnet(fraud_reported ~ ., data=TrainSet,maxit=i,size=6,decay = 0.1)
-  err11[i]=sum(predict(model,TrainSet,type='class')!=TrainSet[,38])/n_tr
-  err12[i]=sum(predict(model,TestSet,type='class')!=TestSet[,38])/n_te
-}
-
-error_1 = na.omit(err11)
-error_2 = na.omit(err12)
-plot(seq(1, 701, 100),error_1,col=1,type="b",ylab="Error rate",xlab="Training epoch",ylim=c(min(min(error_1),min(error_2)),max(max(error_1),max(error_2))))
-lines(seq(1, 701, 100),error_2,col=2,type="b")
-legend("topleft",pch=c(15,15),legend=c("Train","Test"),col=c(1,2),bty="n")
-
-#Final model and evaluation result
-model_best=nnet(fraud_reported ~ ., data=TrainSet,maxit=500,size=6,decay = 0.1)
-
-prediction_test = predict(model_best,TestSet,type="class")
-table = table(TestSet$fraud_reported,prediction_test)
-table
-confusionMatrix(table)
-#Final model and evaluation result
-model_best=nnet(fraud_reported ~ ., data=TrainSet,maxit=300,size=6,decay = 0.1)
-
-prediction_test = predict(model_best,TestSet,type="class")
-
-table1 = table(TestSet$fraud_reported,prediction_test)
-confusionMatrix(table1,positive="Y")
 
 
-```
 
-```{r}
-
-folds <- createFolds(y=TrainSet[,38],k=10)
-
-max=0  
-num=0 
-auc_value<-as.numeric()
-for(i in 1:10){  
-  fold_test <- TrainSet[folds[[i]],]   #取folds[[i]]作为测试集  
-  fold_train <- TrainSet[-folds[[i]],]   # 剩下的数据作为训练集    
-  fold_pre <- nnet(fraud_reported ~ ., data=fold_train,maxit=500,size=6,decay = 0.1)
-  #prediction_test = predict(model_best,TestSet,type="class")
-  fold_predict <- predict(fold_pre,fold_test,type='class')  
-  auc_value<- append(auc_value,as.numeric(auc(as.numeric(fold_test[,38]),fold_predict)))
-}  
-num<-which.max(auc_value)
-print(auc_value)
-
-```
 
 ```{r}
 ################
@@ -358,6 +300,64 @@ prop.table(table(performance))
 #svm.perf
 
 
+
+
+
+#####################
+####Neural Network###
+#####################
+
+#Calculate the error and find a better model
+err11=0
+err12=0
+n_tr=dim(TrainSet)[1]
+n_te=dim(TestSet)[1]
+for(i in seq(1, 701, 100))
+{
+  model=nnet(fraud_reported ~ ., data=TrainSet,maxit=i,size=6,decay = 0.1)
+  err11[i]=sum(predict(model,TrainSet,type='class')!=TrainSet[,38])/n_tr
+  err12[i]=sum(predict(model,TestSet,type='class')!=TestSet[,38])/n_te
+}
+
+error_1 = na.omit(err11)
+error_2 = na.omit(err12)
+plot(seq(1, 701, 100),error_1,col=1,type="b",ylab="Error rate",xlab="Training epoch",ylim=c(min(min(error_1),min(error_2)),max(max(error_1),max(error_2))))
+lines(seq(1, 701, 100),error_2,col=2,type="b")
+legend("topleft",pch=c(15,15),legend=c("Train","Test"),col=c(1,2),bty="n")
+
+#Final model and evaluation result
+model_best=nnet(fraud_reported ~ ., data=TrainSet,maxit=500,size=6,decay = 0.1)
+
+prediction_test = predict(model_best,TestSet,type="class")
+table = table(TestSet$fraud_reported,prediction_test)
+table
+confusionMatrix(table)
+#Final model and evaluation result
+model_best=nnet(fraud_reported ~ ., data=TrainSet,maxit=300,size=6,decay = 0.1)
+
+prediction_test = predict(model_best,TestSet,type="class")
+
+table1 = table(TestSet$fraud_reported,prediction_test)
+confusionMatrix(table1,positive="Y")
+
+#####################
+###### K folds ##########
+#####################
+folds <- createFolds(y=TrainSet[,38],k=10)
+
+max=0  
+num=0 
+auc_value<-as.numeric()
+for(i in 1:10){  
+  fold_test <- TrainSet[folds[[i]],]   #取folds[[i]]作为测试集  
+  fold_train <- TrainSet[-folds[[i]],]   # 剩下的数据作为训练集    
+  fold_pre <- nnet(fraud_reported ~ ., data=fold_train,maxit=500,size=6,decay = 0.1)
+  #prediction_test = predict(model_best,TestSet,type="class")
+  fold_predict <- predict(fold_pre,fold_test,type='class')  
+  auc_value<- append(auc_value,as.numeric(auc(as.numeric(fold_test[,38]),fold_predict)))
+}  
+num<-which.max(auc_value)
+print(auc_value)
 ```
 
 ```{r}

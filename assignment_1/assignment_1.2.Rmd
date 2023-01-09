@@ -1,0 +1,85 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+## Background
+
+The dataset contains transactions made by European cardholders via credit cards in September 2013, and it includes transactions that occurred over a two-day period, with a total of 284,807 transactions, of which 492 were fraudulent. Also, it provides only the PCA-processed feature values, which are 28 in total. However, it also provides, both time and amount features. Finally, the feature 'Class' is the response variable, which takes the value of 1 in case of fraud and 0 otherwise.\
+
+## Objectives
+
+-   Do Exploratory Data Analysis on the data
+
+-   Conduct cluster analysis
+
+## EDA
+
+First, we have to import packages and the data file we need.
+
+```{r}
+library(tidyverse) # data manipulation 
+library(cluster) # clustering algorithms 
+library(factoextra) # clustering algorithms & visualization
+library(caret) # streamline model training process
+library(NbClust)
+library(corrplot)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(dplyr)
+library(ggfortify)
+dataset = read.csv("creditcard.csv")
+```
+
+Before we start, let's take a look at the data.
+
+```{r}
+str(dataset)
+summary(dataset)
+```
+
+We can notice that V1 \~ V28 show nothing special for our analysis, but Class may be a special factor.
+
+## Data preprocessing
+
+```{r}
+# scale amount and time
+scale_amount = scale(dataset$Amount)
+scale_time = scale(dataset$Time)
+
+data_todo = dataset[-c(1,30,31)] %>% 
+  mutate(scale_time)%>% 
+  mutate(scale_amount) %>%
+  mutate(dataset$Class)
+```
+
+## Cluster analysis
+
+```{r}
+wssplot <- function(data, nc=15, seed=2345){
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)}
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")
+  wss
+}
+wssplot(dataset)
+```
+
+We use Elbow method to find the k value. It shows above that the result of k is 2. We found that two clusters are the best clusters for this sampled dataset. We then use these two clusters to do k-means calculations.
+
+```{r}
+kmean <- kmeans(data_todo, 12)
+kmean$centers
+autoplot(kmean, data_todo,frame = TRUE)
+
+```
+
+But this result does not represent well the fraudulent and non-fraudulent cases. Cluster 1 represents non-fraudulent cases and Cluster 2 represents fraudulent cases. But they have overlapping parts which are not easily described.

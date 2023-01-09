@@ -1,0 +1,188 @@
+---
+title: "Exploratory Data Analysis"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+## Background
+
+This dataset contains simulated mobile payment transaction data based on a sample of real transactions extracted from a month of financial logs. A total of 6,362,620 mobile payment transactions are included. Each transaction has information on a total of 11 attributes.
+
+## Objectives
+
+• Summary description of the dataset
+
+• Univariate analysis
+
+• Bi-/Multi-variate analysis
+
+• Missing data/Outlier analysis
+
+## Distinguish Attributes
+
+First, we have to import packages and the data file we need.
+
+```{r}
+# Install packages/load libraries
+library(corrplot)
+library(caret)
+library(tidyverse)
+library(cowplot)
+# Import the data
+dataset = read.csv("PS_20174392719_1491204439457_log.csv")
+```
+
+Then we have a quick view of the data.
+
+```{r}
+#view first ten rows of the dataset
+head(dataset,10)
+```
+
+```{r}
+#Summarize each variable in the dataset
+summary(dataset)
+```
+
+```{r}
+#display rows and columns
+dim(dataset)
+```
+
+```{r}
+str(dataset)
+```
+
+We can see that the dataset has **6362620** rows and **11**columns. The type, nameOrig, nameDest are char variables. The step, isFraud, isFlaggedFraud are int variables. Others are num variables. Specially, isFraud and isFlaggedFraud are either one or zero.
+
+```{r}
+# Let the ggplot be an object.
+data_ggplot = ggplot(data = dataset)
+```
+
+### step
+
+```{r}
+data_ggplot + geom_bar(mapping = aes(x = step,fill = step))+
+  labs(title = 'Distribution of step')
+
+```
+
+First, we try to look at the step. It shows that the transactions are concentrated at the first 400 steps. But there is a clear gap between about 50 and 120 steps. It is not so clear about the time during a complete whole day, so we should divide the all steps into 24 hours because 1 step is 1 hour of time.
+
+```{r}
+step_24hrs=dataset$step %%24
+data_ggplot + geom_bar(mapping = aes(x = step_24hrs,fill=step_24hrs))+
+  labs(x="Time",y="Frequency",title = "Transactions during a whole day")
+```
+
+The chart above shows the frequency of 24h. It is obvious that transactions do not usually occur in the early morning hours. Most of the transactions occur during 10:00 to 20:00.
+
+### type
+
+```{r}
+data_ggplot + geom_bar(mapping = aes(x = type,fill=type))+
+  labs(title = 'The count of different types')
+```
+
+The type of DEBIT is obviously much less than the other. CASH_OUT is almost equal to PAYMENT.
+
+### amount
+
+```{r}
+hist(dataset$amount[dataset$amount<2000000],
+     main = 'Histogram of Amount < 2000000',
+     freq = T,
+     col = 'black',
+     density = 10,
+     xlab = 'amount',
+     ylim=c(0,4000000),
+    ylab="count",)
+```
+
+The figure above shows the 'amount' histogram with a limit lower than 3000000, it is shown that the amount of transactions are concentrated within the range from 0 to 500000.
+
+### others
+
+```{r}
+plot1 = data_ggplot + geom_histogram(mapping = aes(x=oldbalanceOrg  ))
+plot2 = data_ggplot + geom_histogram(mapping = aes(x=newbalanceOrig))
+plot3 = data_ggplot + geom_histogram(mapping = aes(x=oldbalanceDest  ))
+plot4 = data_ggplot + geom_histogram(mapping = aes(x=newbalanceDest  ))
+plot_grid(plot1, plot2,plot3,plot4 ,labels = c("oldbalanceOrg", "newbalanceOrig","newbalanceOrig",'newbalanceDest'))
+```
+
+It is shown that all these four features are on the left side of the graph.
+
+## Bi-/Multi-variate analysis
+
+Based on the above analysis and understanding of the data, we started a new analysis.
+
+### isFraud and step
+
+```{r}
+fac1 = factor(dataset$isFraud)
+```
+
+```{r}
+# isFraud class vs Hour of the day ('isFraud' vs 'step%%24')
+dataset$step_24hrs=dataset$step %%24
+ggplot(dataset,aes(x=step_24hrs,fill=factor(isFraud))) +
+  geom_histogram(bins=24)+
+  labs( x = 'Hours',y = 'Transactions')+
+  ggtitle('Distribution of time in a day of Non-Fraud & Fraud Transaction')+
+  scale_fill_discrete(name = "Non Fraud & Fraud")+
+  facet_wrap(.~isFraud, scales = 'free')+
+  theme(legend.position="top")
+```
+
+We noticed that fraud cases can occur at any time of the day but normal cases can only occur at the day time.
+
+### isFraud and type
+
+```{r}
+isNonFraud_type_set = subset(dataset,dataset$isFraud == 0)
+isFraud_type_set = subset(dataset,dataset$isFraud == 1)
+
+ggplot(data = isNonFraud_type_set) + geom_jitter(mapping = aes(x = type,y =amount, fill=type))+
+  labs(title = 'The count of different types in NonFraud_type_set ')
+ggplot(data = isFraud_type_set) + geom_jitter(mapping = aes(x = type,y =amount, fill=type))+
+  labs(title = 'The count of different types in Fraud_type_set')
+
+```
+
+The first one shows that non fraud transactions are evenly distributed in all parts except DEBIT part. The second pie shows that fraud transactions are evenly distributed in TRANSFER and CASH_OUT.
+
+### isFraud, amount and type
+
+```{r}
+isfraud_amount_type <- subset(dataset,dataset$type == 'CASH_OUT'|dataset$type == 'TRANSFER')
+ggplot(isfraud_amount_type,aes(x=amount,y=isFraud,colour=type)) +
+  geom_point()+
+  labs( x = 'Amount of transaction',y = 'Non Fraud & Fraud Transaction')+
+  ggtitle('Distribution of transaction amount by Non Fraud & Fraud Transaction')
+```
+
+We can find that fraud happens only within a small amount of transaction.
+
+## Missing data/Outlier analysis & Data Cleaning
+
+```{r}
+dataset_sub = subset(dataset,dataset$isFlaggedFraud == 1)
+ggplot(data = dataset_sub) + 
+  geom_bar(mapping = aes(x = type,fill=type))+
+  labs(title = 'The count of different types')
+```
+
+We found that only 16 transactions had 'isFlaggedFraud' set, and all 16 transactions were of the 'transfer' type. It only accounts for less than 1% of the total. Therefore, we can conclude that reducing this attribute from the dataset does not result in any loss of information.
+
+```{r}
+#A CORRELATION MATRIX IS CREATED
+corr <- sapply(dataset, is.numeric)
+corrchart <- cor(dataset[,corr])
+corrplot(corrchart, main = '\n\n Correlation Chart',method = "number")
+
+```
+
+Also, we can also find that oldbalanceOrg, newbalanceOrig these have little to do with the overall. So we can clean these data.
